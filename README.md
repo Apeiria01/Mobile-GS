@@ -82,7 +82,7 @@ Rendering with the compressed file (comp.xz), otherwise using the ply file. The 
 ## 👍 **Acknowledgement**
 This work is built on many amazing research works and open-source projects, thanks a lot to all the authors for sharing!
 * [Mini-Splatting](https://github.com/fatPeter/mini-splatting)
-* [OMG](https://github.com/cvlab-columbia/zero123)
+* [OMG](https://github.com/maincold2/OMG)
 * [MVGS](https://github.com/xiaobiaodu/MVGS)
 
 
