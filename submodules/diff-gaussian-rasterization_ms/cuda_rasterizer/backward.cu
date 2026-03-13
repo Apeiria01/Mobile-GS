@@ -567,13 +567,8 @@ renderCUDA(
 			glm::vec3 scale = collected_scales[j];
             float max_scale = fmaxf(scale.x, fmaxf(scale.y, scale.z));
 
-//             float x = depth * theta + phi;
-//             float x = exp(-theta * powf(depth, phi));
             const float exp_term = expf(max_scale / depth_safe);
             float weight = exp_term + phi / (depth_safe * depth_safe) + phi*phi ;
-//             float weight = theta / depth + phi;
-//             weight = fminf(fmaxf(0.0f, weight), 1.0f);
-
 
 			if (power > 0.0f)
 				continue;
@@ -607,9 +602,9 @@ renderCUDA(
 
 
 				const float Wch          = fmaxf(ws[ch], 1e-9f);           // W = Σ α w
-                const float out_c        = out_color_3C[ch];               // 像素前向颜色
-                const float bg_c         = bg_color[ch];                   // 背景颜色
-                const float feature_c    = collected_colors[ch * BLOCK_SIZE + j];   // 该 Gaussian 的颜色
+                const float out_c        = out_color_3C[ch];               // foreground
+                const float bg_c         = bg_color[ch];                   // background
+                const float feature_c    = collected_colors[ch * BLOCK_SIZE + j];   // gaussian color
                 const float A_ch         = out_c - T_final * bg_c;         // A = (F/W) * (1-T)
                 const float diff         = feature_c - A_ch / fmaxf(one_minus_Tfinal, 1e-9f); // f_j - F/W
                 const float dL_dchannel  = dL_dpixel[ch];
@@ -627,26 +622,15 @@ renderCUDA(
                 const float term_S       = S * weight * diff / Wch;
                 const float term_dS      = (T_final / denom) * (A_ch / fmaxf(S, 1e-9f));
                 const float dA_dalpha_ch = term_S + term_dS;
-                const float dOut_dalpha_ch = dA_dalpha_ch + dT_dalpha * bg_c;
-
-                /*------------------------------------------------------------------------
-                 * 3.  dOut / dweight  (= S * α * diff / W )
-                 * ----------------------------------------------------------------------*/
+                const float dOut_dalpha_ch = dA_dalpha_ch + dT_dalpha * bg_c
                 const float dOut_dweight_ch = S * alpha * diff / Wch;
 
-                // 把每个通道的贡献累加到 Gaussian 级别梯度
                 dL_dalpha  += dL_dchannel * dOut_dalpha_ch;
                 dL_dweight += dL_dchannel * dOut_dweight_ch;
 
 			}
 
 
-
-//             if (x > 0.0f && x < 1.0f) {
-            // weight = x, x = depth_j * theta + phi
-            // ∂x/∂theta = depth_j, ∂x/∂phi = 1
-//             atomicAdd(&dL_dtheta[global_id], dL_dweight * weight * (-1 * powf(depth, phi)));
-//             atomicAdd(&dL_dphi[global_id], dL_dweight * weight * (-1 * theta * powf(depth, phi) * logf(depth)));
             const float dweight_dd = -exp_term * (max_scale / (depth_safe * depth_safe)) - 2.0f * phi / (depth_safe * depth_safe * depth_safe);
 			atomicAdd(&dL_ddepth[global_id], dL_dweight * dweight_dd);
 

@@ -36,6 +36,11 @@ Welcome to **watch** 👀 this repository for the latest updates.
 For installation:
 We recommend to use cuda 12.1 with python 3.11 for easy setup.
 ```shell
+git clone git@github.com:xiaobiaodu/Mobile-GS.git
+
+conda create -n mobile-gs python==3.11
+conda activate mobile-gs
+
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
 pip install -r requirements.txt
 ```

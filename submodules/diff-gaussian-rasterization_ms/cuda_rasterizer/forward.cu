@@ -372,10 +372,8 @@ renderCUDA(
             glm::vec3 scale = collected_scales[j];
             float max_scale = fmaxf(scale.x, fmaxf(scale.y, scale.z));
 
-//             float weight = exp(-theta * powf(depth, phi));
             float weight = expf(max_scale / depth ) + phi / (depth * depth) + phi*phi ;
-//             float weight = theta / depth + phi;
-//             weight = fminf(fmaxf(0.0f, weight), 1.0f);
+
 
 			float power = -0.5f * (con_o.x * d.x * d.x + con_o.z * d.y * d.y) - con_o.y * d.x * d.y;
 			if (power > 0.0f)
