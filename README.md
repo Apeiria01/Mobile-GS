@@ -22,6 +22,8 @@
 
 Welcome to **watch** 👀 this repository for the latest updates.
 
+✅ **[2026.3.21]** : We only release the initial CUDA version for readers to bettet understand our work. As for mobile-side Vulkan code, we cannot release this part of code due to the company's policy.
+
 ✅ **[2026.3.13]** : Release [project page](https://xiaobiaodu.github.io/mobile-gs-project/).
 
 ✅ **[2026.3.13]** : Code Release. 

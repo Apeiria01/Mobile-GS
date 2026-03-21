@@ -14,25 +14,38 @@ from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render_imp
+from gaussian_renderer import render
 import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
 import numpy as np
-
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
+
+
+    for _ in range(10):
+        render(views[0], gaussians, pipeline, background)
+
+
+    kernerl_time = 0
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
-        rendering = render_imp(view, gaussians, pipeline, background)["render"]
+        rendering_pkg = render(view, gaussians, pipeline, background)
+        rendering = rendering_pkg["render"]
+        kernerl_time += rendering_pkg["kernerl_time"][-1].item()
+        
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
+
+    rendering_time = kernerl_time/len(views)
+    FPS = 1000 / rendering_time
+    print("FPS: {}".format(FPS))
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, decode : bool):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
