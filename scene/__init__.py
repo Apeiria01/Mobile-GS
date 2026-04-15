@@ -100,14 +100,37 @@ class Scene:
                                                                                                     self.loaded_iter),
                                                                                            'opacity_phi_nn.pt'), weights_only=True))
 
-                if self.gaussians.w_bg is not None:
+                if getattr(self.gaussians, 'w_bg', None) is not None:
                     self.gaussians.w_bg = torch.load(os.path.join(self.model_path, 'w_bg.pth'), weights_only=True)
+
+                mlp_path = os.path.join(self.model_path, "point_cloud",
+                                        "iteration_" + str(self.loaded_iter), "mlp_params.pt")
+                if os.path.exists(mlp_path) and hasattr(self.gaussians, 'mlp_cont') and self.gaussians.mlp_cont is not None:
+                    mlp_data = torch.load(mlp_path, weights_only=False)
+                    self.gaussians.mlp_cont.load_state_dict(mlp_data['mlp_cont'])
+                    self.gaussians.mlp_dc.load_state_dict(mlp_data['mlp_dc'])
+                    self.gaussians.mlp_view.load_state_dict(mlp_data['mlp_view'])
+                    self.gaussians._features_static = mlp_data['features_static']
+                    self.gaussians._features_view = mlp_data['features_view']
+                    self.gaussians.net_enabled = True
         else:
             self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
         self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
+        if self.gaussians.opacity_phi_nn is not None:
+            torch.save(self.gaussians.opacity_phi_nn.state_dict(), os.path.join(point_cloud_path, "opacity_phi_nn.pt"))
+        if getattr(self.gaussians, 'w_bg', None) is not None:
+            torch.save(self.gaussians.w_bg, os.path.join(self.model_path, "w_bg.pth"))
+        if hasattr(self.gaussians, 'mlp_cont') and self.gaussians.mlp_cont is not None:
+            torch.save({
+                'mlp_cont': self.gaussians.mlp_cont.state_dict(),
+                'mlp_dc': self.gaussians.mlp_dc.state_dict(),
+                'mlp_view': self.gaussians.mlp_view.state_dict(),
+                'features_static': self.gaussians._features_static,
+                'features_view': self.gaussians._features_view,
+            }, os.path.join(point_cloud_path, "mlp_params.pt"))
         
 
     def getTrainCameras(self, scale=1.0):

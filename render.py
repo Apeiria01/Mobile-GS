@@ -50,6 +50,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
         gaussians.init_vnn()
+        gaussians.construct_net(train=False)
 
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False, decode=decode)
         print("Gaussian number: ", len(gaussians.get_xyz))

@@ -25,8 +25,9 @@ from utils.sh_utils import SH2RGB
 import tinycudann as tcnn
 from utils.gpcc_utils import compress_gpcc, decompress_gpcc, calculate_morton_order, float16_to_uint16, uint16_to_float16
 from utils.compress_utils import *
-import cupy as cp
-from cuml.cluster import KMeans
+
+from sklearn.cluster import KMeans as _SKLearnKMeans
+HAS_CUML = False
 from icecream import ic
 
 
@@ -47,7 +48,7 @@ def init_cdf_mask(importance, thres=1.0):
 
 
 
-
+'''
 class OpaictyPhiNN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int = 1, hidden_dim: int = 128):
         super().__init__()
@@ -97,7 +98,51 @@ class OpaictyPhiNN(nn.Module):
 
 
         return  phi, opacity
+'''
 
+import tinycudann as tcnn
+
+class OpaictyPhiNN(nn.Module):
+    """tcnn 版本，保持对外接口完全一致"""
+
+    def __init__(self, input_dim: int, output_dim: int = 1, hidden_dim: int = 64):
+        super().__init__()
+        self.input_dim = input_dim
+        # tcnn FullyFusedMLP 要求输入维度为 16 的倍数
+        self.pad_dim = ((input_dim + 15) // 16) * 16  # 向上取整到 16
+
+        # 单个 tcnn 网络
+        # 输出 16 维（FullyFusedMLP 最小输出），只用前 2 维
+        self.net = tcnn.Network(
+            n_input_dims=self.pad_dim,
+            n_output_dims=16,
+            network_config={
+                "otype": "FullyFusedMLP",
+                "activation": "ReLU",
+                "output_activation": "None",
+                "n_neurons": hidden_dim,       # 64，所有隐层等宽
+                "n_hidden_layers": 3,
+            },
+        )
+
+    def forward(self, shs, scales, xyz, viewdirs, rotations):
+        """签名和返回值与原版完全一致"""
+        shs = shs.view(shs.size(0), -1)
+        shs = torch.nn.functional.normalize(shs)
+        scales = torch.nn.functional.normalize(scales)
+
+        feat = torch.cat([shs, viewdirs, scales, rotations], dim=1)
+
+        # 补零到 pad_dim
+        if feat.shape[1] < self.pad_dim:
+            feat = torch.nn.functional.pad(feat, (0, self.pad_dim - feat.shape[1]))
+
+        out = self.net(feat).float()          # [N, 16]
+
+        phi     = torch.relu(out[:, 0:1])          # 对应原版 phi_output
+        opacity = torch.sigmoid(out[:, 1:2])        # 对应原版 opacity_output
+
+        return phi, opacity
 
 
 
@@ -372,18 +417,23 @@ class GaussianModel:
     def save_ply(self, path):
         mkdir_p(os.path.dirname(path))
 
+        n_pts = self._xyz.shape[0]
         xyz = self._xyz.detach().cpu().numpy()
-        normals = np.zeros_like(xyz)
-        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        opacities = self._opacity.detach().cpu().numpy()
+        opacities = self._opacity.detach().cpu().numpy() if self._opacity.shape[0] == n_pts else np.zeros((n_pts, 1), dtype=np.float32)
         scale = self._scaling.detach().cpu().numpy()
         rotation = self._rotation.detach().cpu().numpy()
 
-     
+        # If net_enabled, _features_dc/_features_rest may be out of sync after pruning
+        if self._features_dc.shape[0] == n_pts:
+            f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+            f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        else:
+            f_dc = np.zeros((n_pts, 3), dtype=np.float32)
+            f_rest = np.zeros((n_pts, self._features_rest.shape[1] * self._features_rest.shape[2]), dtype=np.float32)
+
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
 
-        elements = np.empty(xyz.shape[0], dtype=dtype_full)
+        elements = np.empty(n_pts, dtype=dtype_full)
         attributes = np.concatenate((xyz, f_dc, f_rest, opacities, scale, rotation), axis=1)
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
@@ -989,17 +1039,25 @@ class GaussianModel:
     def kmeans(self, param_data, code_list, index_list, svq_len, n_clusters, code_params):
         assert param_data.shape[1] % svq_len == 0, "invalid sub-vector length"
         for i in range(param_data.shape[1]//svq_len):
-            input_cp = cp.asarray(param_data[:, i*svq_len:(i+1)*svq_len].detach().cpu())
-            kmeans = KMeans(n_clusters=n_clusters, max_iter=1000, n_init=1)
-            labels = kmeans.fit_predict(input_cp)
-            cluster_centers = kmeans.cluster_centers_
-
-            codebook = torch.nn.Parameter(torch.from_dlpack(cluster_centers)).cuda()
-            index = torch.from_dlpack(labels).cuda().long()
+            data_np = param_data[:, i*svq_len:(i+1)*svq_len].detach().cpu()
+            if HAS_CUML:
+                input_cp = cp.asarray(data_np)
+                km = KMeans(n_clusters=n_clusters, max_iter=1000, n_init=1)
+                labels = km.fit_predict(input_cp)
+                cluster_centers = km.cluster_centers_
+                codebook = torch.nn.Parameter(torch.from_dlpack(cluster_centers)).cuda()
+                index = torch.from_dlpack(labels).cuda().long()
+            else:
+                data_np = data_np.numpy().astype(np.float32)
+                km = _SKLearnKMeans(n_clusters=n_clusters, max_iter=1000, n_init=1)
+                labels = km.fit_predict(data_np)
+                cluster_centers = km.cluster_centers_
+                codebook = torch.nn.Parameter(torch.tensor(cluster_centers, dtype=torch.float32)).cuda()
+                index = torch.tensor(labels, dtype=torch.long).cuda()
 
             code_list.append(codebook)
             index_list.append(index)
-            code_params.append(codebook) 
+            code_params.append(codebook)
 
     def encode(self, path):
         save_dict = dict()

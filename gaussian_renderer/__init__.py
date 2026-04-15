@@ -180,7 +180,20 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
             colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
         else:
-            shs = pc.get_features
+            if pc.net_enabled == False:
+                shs = pc.get_features
+            else:
+                cont_feature = pc.mlp_cont(pc.contract_to_unisphere(means3D.clone().detach(), torch.tensor([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], device='cuda')))
+                if pc.vq_enabled:
+                    app_feature = pc.get_svq_appearance
+                    space_feature = torch.cat([cont_feature, app_feature[:,0:3]],dim=-1)
+                    view_feature = torch.cat([cont_feature, app_feature[:,3:6]],dim=-1)
+                else:
+                    space_feature = torch.cat([cont_feature, pc._features_static],dim=-1)
+                    view_feature = torch.cat([cont_feature, pc._features_view],dim=-1)
+                shs = pc.mlp_view(view_feature).reshape(-1,pc.max_sh_rest,3).float()
+                dc = pc.mlp_dc(space_feature).reshape(-1,1,3).float()
+                shs = torch.cat([dc, shs], dim=1)
     else:
         colors_precomp = override_color
 

@@ -47,8 +47,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     opt_dict = None
     if checkpoint:
         print("loading ckpt..........")
-        (model_params, first_iter) = torch.load(checkpoint)
-        (teacher_model_params, _) = torch.load(checkpoint)
+        (model_params, first_iter) = torch.load(checkpoint, weights_only=False)
+        (teacher_model_params, _) = torch.load(checkpoint, weights_only=False)
         gaussians_tea = TeaGaussianModel(sh_degree=3)
         gaussians_tea.restore(teacher_model_params)
         opt_dict = gaussians.restore(model_params, opt)
@@ -170,7 +170,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration == opt.iterations:
                 progress_bar.close()
 
-            if iteration == opt.iterations:
+            if iteration == opt.iterations and gaussians.vq_enabled:
                 save_dict = gaussians.encode(scene.model_path)
                 save_comp(scene.model_path + "/comp.xz", save_dict)
 

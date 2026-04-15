@@ -1,0 +1,11 @@
+*.pdf
+*.zip
+/tandt
+/db
+.vscode
+.claude
+*.pyc
+/output
+*.pyd
+__pycache__/
+*.egg-info/

@@ -1,0 +1,5 @@
+# ninja log v5
+1	15202	7968070415632205	D:/Mobile-GS/submodules/simple-knn/build/temp.win-amd64-cpython-312/Release/ext.obj	465af95d339c58b7
+96	18668	7968082157521192	D:/Mobile-GS/submodules/simple-knn/build/temp.win-amd64-cpython-312/Release/ext.obj	6c45560865d660dc
+12	22310	7968083303705517	D:/Mobile-GS/submodules/simple-knn/build/temp.win-amd64-cpython-312/Release/simple_knn.obj	91af745bb306b4d0
+71	55243	7968083632844608	D:/Mobile-GS/submodules/simple-knn/build/temp.win-amd64-cpython-312/Release/spatial.obj	59c7247952dbff7
