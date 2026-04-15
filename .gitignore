@@ -9,3 +9,4 @@
 *.pyd
 __pycache__/
 *.egg-info/
+.vs
