@@ -56,6 +56,7 @@ class TeaGaussianModel:
         self.optimizer = None
         self.percent_dense = 0
         self.spatial_lr_scale = 0
+        self.opacity_phi_nn = None
         self.setup_functions()
 
     def capture(self):

@@ -1,5 +1,5 @@
-python pretrain.py -s D:\Mobile-GS\db\playroom -m D:\Mobile-GS\output\playroom --eval --imp_metric indoor --sh_degree 3 --iterations 30000 --resolution 2 
+python pretrain.py -s ./db/playroom -m ./output/playroom --eval --imp_metric indoor --sh_degree 3 --iterations 30000 --resolution 2 
 
-python train.py -s D:\Mobile-GS\db\playroom -m D:\Mobile-GS\output\playroom --eval --start_checkpoint D:\Mobile-GS\output\playroom\chkpnt30000.pth --iterations 40000 --svq_itr 99999 --test_iterations 40000 --save_iterations 40000 --resolution 2
+python train.py -s ./db/playroom -m ./output/playroom --eval --start_checkpoint ./output/playroom/chkpnt30000.pth --iterations 60000 --svq_itr 99999 --test_iterations 60000 --save_iterations 60000 --resolution 2
 
-python render.py -m output/playroom -s db/playroom --iteration 40000 --skip_train 
+python render.py -m ./output/playroom -s ./db/playroom --iteration 40000 --skip_train 
