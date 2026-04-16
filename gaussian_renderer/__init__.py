@@ -11,6 +11,9 @@
 
 import torch
 import math
+import struct
+import os
+import numpy as np
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 from diff_gaussian_rasterization_ms_nosorting import GaussianRasterizationSettings, GaussianRasterizer
@@ -120,10 +123,74 @@ def render_teacher(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Te
 
 
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def _save_mlp_debug(save_dir, shs, scales, rotations, viewdirs, camera_center, phi, opacity):
+    """Save OpaictyPhiNN inputs (UE5 binary) and outputs (human-readable CSV).
+
+    Input binary (mlp_input.bin) — matches UE5 MLPForwardCS assembly order:
+        Header (7 x uint32):
+            magic(0x4D4C5044)  N  input_dim  shs_dim  viewdir=3  scale=3  rot=4
+        Camera (3 x float32): camera_position
+        Data (float32 arrays, contiguous):
+            shs_raw     [N x shs_dim]    before L2-norm
+            viewdirs    [N x 3]
+            scales_raw  [N x 3]          before L2-norm
+            rotations   [N x 4]
+            feat_concat [N x input_dim]  after norm + concat (actual MLP input)
+
+    Output CSV (mlp_output.csv):
+            index, phi, opacity
     """
-    Render the scene. 
-    
+    os.makedirs(save_dir, exist_ok=True)
+
+    with torch.no_grad():
+        # Reconstruct the assembled feature (same as OpaictyPhiNN.forward)
+        shs_flat = shs.view(shs.size(0), -1)
+        shs_norm = torch.nn.functional.normalize(shs_flat)
+        scales_norm = torch.nn.functional.normalize(scales)
+        feat = torch.cat([shs_norm, viewdirs, scales_norm, rotations], dim=1)
+
+        shs_raw_np   = shs_flat.cpu().float().numpy()
+        viewdirs_np  = viewdirs.cpu().float().numpy()
+        scales_np    = scales.cpu().float().numpy()
+        rot_np       = rotations.cpu().float().numpy()
+        feat_np      = feat.cpu().float().numpy()
+        phi_np       = phi.cpu().float().numpy().flatten()
+        opacity_np   = opacity.cpu().float().numpy().flatten()
+        cam_np       = camera_center.cpu().float().numpy().flatten()
+
+        N          = feat_np.shape[0]
+        input_dim  = feat_np.shape[1]
+        shs_dim    = shs_raw_np.shape[1]
+
+        # ---- Binary for UE5 ----
+        bin_path = os.path.join(save_dir, "mlp_input.bin")
+        with open(bin_path, "wb") as f:
+            f.write(struct.pack("<7I",
+                0x4D4C5044, N, input_dim, shs_dim, 3, 3, 4))
+            f.write(cam_np.astype(np.float32).tobytes())
+            f.write(shs_raw_np.tobytes())
+            f.write(viewdirs_np.tobytes())
+            f.write(scales_np.tobytes())
+            f.write(rot_np.tobytes())
+            f.write(feat_np.tobytes())
+
+        # ---- CSV for humans ----
+        csv_path = os.path.join(save_dir, "mlp_output.csv")
+        with open(csv_path, "w") as f:
+            f.write("index,phi,opacity\n")
+            for i in range(N):
+                f.write(f"{i},{phi_np[i]:.6f},{opacity_np[i]:.6f}\n")
+
+        sz = os.path.getsize(bin_path)
+        print(f"\n[MLP Debug] {bin_path}  ({sz/1024/1024:.2f} MB)")
+        print(f"            {csv_path}  ({N} rows)")
+        print(f"  N={N}  input_dim={input_dim}  (shs={shs_dim}+viewdir=3+scale=3+rot=4)")
+
+
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, debug_save_dir = None):
+    """
+    Render the scene.
+
     Background tensor (bg_color) must be on GPU!
     """
  
@@ -202,6 +269,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
 
     phi, opacity = pc.opacity_phi_nn(shs, scales, pc.get_xyz, dir_pp_normalized, rotations)
+
+    # ---- Save MLP debug data ----
+    if debug_save_dir is not None:
+        _save_mlp_debug(debug_save_dir, shs, scales, rotations,
+                        dir_pp_normalized, viewpoint_camera.camera_center,
+                        phi, opacity)
 
     # Rasterize visible Gaussians to image, obtain their radii (on screen).
     rendered_image, radii, kernerl_time = rasterizer(

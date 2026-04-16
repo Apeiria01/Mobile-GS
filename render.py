@@ -32,6 +32,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     for _ in range(10):
         render(views[0], gaussians, pipeline, background)
 
+    # First view: save MLP debug (input binary for UE5 + output CSV)
+    debug_dir = os.path.join(model_path, name, "ours_{}".format(iteration), "mlp_debug")
+    render(views[0], gaussians, pipeline, background, debug_save_dir=debug_dir)
 
     kernerl_time = 0
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):

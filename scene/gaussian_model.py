@@ -48,7 +48,7 @@ def init_cdf_mask(importance, thres=1.0):
 
 
 
-'''
+
 class OpaictyPhiNN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int = 1, hidden_dim: int = 128):
         super().__init__()
@@ -98,10 +98,10 @@ class OpaictyPhiNN(nn.Module):
 
 
         return  phi, opacity
-'''
+
 
 import tinycudann as tcnn
-
+'''
 class OpaictyPhiNN(nn.Module):
     """tcnn 版本，保持对外接口完全一致"""
 
@@ -143,7 +143,7 @@ class OpaictyPhiNN(nn.Module):
         opacity = torch.sigmoid(out[:, 1:2])        # 对应原版 opacity_output
 
         return phi, opacity
-
+'''
 
 
 class GaussianModel:

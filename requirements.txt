@@ -2,6 +2,7 @@ tqdm
 plyfile
 submodules/diff-gaussian-rasterization_ms
 submodules/diff-gaussian-rasterization_msori
+submodules/diff-gaussian-rasterization_ms_nosorting
 submodules/simple-knn
 dahuffman
 git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
